@@ -55,10 +55,10 @@ class SkillTasksActivity : BaseActivity() {
 
             override fun getItem(position: Int): Fragment {
                 val fragment = SkillTasksRecyclerViewFragment()
-                when (position) {
-                    0 -> fragment.taskType = Task.TYPE_HABIT
-                    1 -> fragment.taskType = Task.TYPE_DAILY
-                    else -> fragment.taskType = Task.TYPE_TODO
+                fragment.taskType = when (position) {
+                    0 -> Task.TYPE_HABIT
+                    1 -> Task.TYPE_DAILY
+                    else -> Task.TYPE_TODO
                 }
 
                 compositeSubscription.add(fragment.getTaskSelectionEvents().subscribe(Consumer { task -> taskSelected(task) }, RxErrorHandler.handleEmptyError()))

@@ -71,11 +71,11 @@ class AppConfigManager {
         return remoteConfig.getBoolean("showSubscriptionBanner")
     }
 
-    fun showSubscriptionSubtitle(): Boolean {
-        return remoteConfig.getBoolean("showSubscriptionSubtitle")
-    }
-
     fun minimumPasswordLength(): Long {
         return remoteConfig.getLong("minimumPasswordLength")
+    }
+
+    fun useNewMysteryBenefits(): Boolean {
+        return remoteConfig.getBoolean("useNewMysteryBenefits")
     }
 }

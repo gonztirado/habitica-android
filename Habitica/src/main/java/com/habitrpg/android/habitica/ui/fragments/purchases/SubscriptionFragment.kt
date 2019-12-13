@@ -1,16 +1,17 @@
 package com.habitrpg.android.habitica.ui.fragments.purchases
 
 import android.content.Intent
-import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
+import android.widget.EditText
 import androidx.core.view.isVisible
 import com.habitrpg.android.habitica.R
 import com.habitrpg.android.habitica.components.UserComponent
+import com.habitrpg.android.habitica.data.InventoryRepository
 import com.habitrpg.android.habitica.data.UserRepository
+import com.habitrpg.android.habitica.databinding.FragmentSubscriptionBinding
 import com.habitrpg.android.habitica.events.UserSubscribedEvent
 import com.habitrpg.android.habitica.extensions.addCancelButton
 import com.habitrpg.android.habitica.helpers.AppConfigManager
@@ -22,15 +23,11 @@ import com.habitrpg.android.habitica.proxy.CrashlyticsProxy
 import com.habitrpg.android.habitica.ui.activities.GemPurchaseActivity
 import com.habitrpg.android.habitica.ui.activities.GiftSubscriptionActivity
 import com.habitrpg.android.habitica.ui.fragments.BaseFragment
-import com.habitrpg.android.habitica.ui.helpers.bindOptionalView
-import com.habitrpg.android.habitica.ui.helpers.bindView
+import com.habitrpg.android.habitica.ui.helpers.DataBindingUtils
 import com.habitrpg.android.habitica.ui.helpers.dismissKeyboard
-import com.habitrpg.android.habitica.ui.views.HabiticaIconsHelper
 import com.habitrpg.android.habitica.ui.views.dialogs.HabiticaAlertDialog
-import com.habitrpg.android.habitica.ui.views.subscriptions.SubscriptionDetailsView
 import com.habitrpg.android.habitica.ui.views.subscriptions.SubscriptionOptionView
 import io.reactivex.functions.Consumer
-import kotlinx.android.synthetic.main.fragment_subscription.*
 import org.greenrobot.eventbus.Subscribe
 import org.solovyev.android.checkout.Inventory
 import org.solovyev.android.checkout.Sku
@@ -38,44 +35,15 @@ import javax.inject.Inject
 
 class SubscriptionFragment : BaseFragment(), GemPurchaseActivity.CheckoutFragment {
 
+    private lateinit var binding: FragmentSubscriptionBinding
     @Inject
     lateinit var crashlyticsProxy: CrashlyticsProxy
     @Inject
     lateinit var userRepository: UserRepository
     @Inject
     lateinit var appConfigManager: AppConfigManager
-
-    private val giftOneGetOneContainer: ViewGroup? by bindView(R.id.gift_subscription_container)
-    private val giftOneGetOneButton: Button? by bindView(R.id.gift_subscription_promo_button)
-    private val giftSubscriptionButton: Button? by bindView(R.id.gift_subscription_button)
-
-    private val subscribeListitem1Box: View? by bindView(R.id.subscribe_listitem1_box)
-    private val subscribeListitem2Box: View? by bindView(R.id.subscribe_listitem2_box)
-    private val subscribeListitem3Box: View? by bindView(R.id.subscribe_listitem3_box)
-    private val subscribeListitem4Box: View? by bindView(R.id.subscribe_listitem4_box)
-
-    private val subscribeListitem1Button: ImageView? by bindView(R.id.subscribe_listitem1_expand)
-    private val subscribeListitem2Button: ImageView? by bindView(R.id.subscribe_listitem2_expand)
-    private val subscribeListitem3Button: ImageView? by bindView(R.id.subscribe_listitem3_expand)
-    private val subscribeListitem4Button: ImageView? by bindView(R.id.subscribe_listitem4_expand)
-
-    private val subscribeListItem1Description: TextView? by bindView(R.id.subscribe_listitem1_description)
-    private val subscribeListItem2Description: TextView? by bindView(R.id.subscribe_listitem2_description)
-    private val subscribeListItem3Description: TextView? by bindView(R.id.subscribe_listitem3_description)
-    private val subscribeListItem4Description: TextView? by bindView(R.id.subscribe_listitem4_description)
-
-    private val loadingIndicator: ProgressBar? by bindOptionalView(R.id.loadingIndicator)
-    private val subscriptionOptions: View? by bindView(R.id.subscriptionOptions)
-
-    private val subscription1MonthView: SubscriptionOptionView? by bindView(R.id.subscription1month)
-    private val subscription3MonthView: SubscriptionOptionView? by bindView(R.id.subscription3month)
-    private val subscription6MonthView: SubscriptionOptionView? by bindView(R.id.subscription6month)
-    private val subscription12MonthView: SubscriptionOptionView? by bindView(R.id.subscription12month)
-
-    private val subscriptionButton: Button? by bindOptionalView(R.id.subscribeButton)
-    private val subscriptionDetailsView: SubscriptionDetailsView? by bindView(R.id.subscriptionDetails)
-    private val subscribeBenefitsTitle: TextView? by bindView(R.id.subscribeBenefitsTitle)
-    private val supportTextView: TextView? by bindView(R.id.supportTextView)
+    @Inject
+    lateinit var inventoryRepository: InventoryRepository
 
     private var selectedSubscriptionSku: Sku? = null
     private var skus: List<Sku> = emptyList()
@@ -87,53 +55,41 @@ class SubscriptionFragment : BaseFragment(), GemPurchaseActivity.CheckoutFragmen
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
                               savedInstanceState: Bundle?): View? {
-
         super.onCreateView(inflater, container, savedInstanceState)
-
         fetchUser(null)
-
-        return inflater.inflate(R.layout.fragment_subscription, container, false)
+        binding = FragmentSubscriptionBinding.inflate(inflater, container, false)
+        return binding.root
     }
 
     @Subscribe
     fun fetchUser(event: UserSubscribedEvent?) {
-        compositeSubscription.add(userRepository.retrieveUser(false, true).subscribe(Consumer { this.setUser(it) }, RxErrorHandler.handleEmptyError()))
+        compositeSubscription.add(userRepository.retrieveUser(withTasks = false, forced = true).subscribe(Consumer { this.setUser(it) }, RxErrorHandler.handleEmptyError()))
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        subscriptionOptions?.visibility = View.GONE
-        subscriptionDetailsView?.visibility = View.GONE
+        binding.subscriptionOptions.visibility = View.GONE
+        binding.subscriptionDetails.visibility = View.GONE
+        binding.subscriptionDetails.onShowSubscriptionOptions = { showSubscriptionOptions() }
 
-        giftOneGetOneButton?.setOnClickListener { showGiftSubscriptionDialog() }
-        giftSubscriptionButton?.setOnClickListener { showGiftSubscriptionDialog() }
+        binding.giftSubscriptionContainer.setOnClickListener { showGiftSubscriptionDialog() }
+        binding.giftSubscriptionButton.setOnClickListener { showGiftSubscriptionDialog() }
 
-        this.subscription1MonthView?.setOnPurchaseClickListener(View.OnClickListener { selectSubscription(PurchaseTypes.Subscription1Month) })
-        this.subscription3MonthView?.setOnPurchaseClickListener(View.OnClickListener { selectSubscription(PurchaseTypes.Subscription3Month) })
-        this.subscription6MonthView?.setOnPurchaseClickListener(View.OnClickListener { selectSubscription(PurchaseTypes.Subscription6Month) })
-        this.subscription12MonthView?.setOnPurchaseClickListener(View.OnClickListener { selectSubscription(PurchaseTypes.Subscription12Month) })
+        binding.subscription1month.setOnPurchaseClickListener(View.OnClickListener { selectSubscription(PurchaseTypes.Subscription1Month) })
+        binding.subscription3month.setOnPurchaseClickListener(View.OnClickListener { selectSubscription(PurchaseTypes.Subscription3Month) })
+        binding.subscription6month.setOnPurchaseClickListener(View.OnClickListener { selectSubscription(PurchaseTypes.Subscription6Month) })
+        binding.subscription12month.setOnPurchaseClickListener(View.OnClickListener { selectSubscription(PurchaseTypes.Subscription12Month) })
 
-        this.subscribeListitem1Box?.setOnClickListener { toggleDescriptionView(this.subscribeListitem1Button, this.subscribeListItem1Description) }
-        this.subscribeListitem2Box?.setOnClickListener { toggleDescriptionView(this.subscribeListitem2Button, this.subscribeListItem2Description) }
-        this.subscribeListitem3Box?.setOnClickListener { toggleDescriptionView(this.subscribeListitem3Button, this.subscribeListItem3Description) }
-        this.subscribeListitem4Box?.setOnClickListener { toggleDescriptionView(this.subscribeListitem4Button, this.subscribeListItem4Description) }
+        binding.subscribeButton.setOnClickListener { subscribeUser() }
 
-        val heartDrawable = BitmapDrawable(resources, HabiticaIconsHelper.imageOfHeartLarge())
-        supportTextView?.setCompoundDrawablesWithIntrinsicBounds(null, null, null, heartDrawable)
+        binding.giftSubscriptionContainer?.isVisible = appConfigManager.enableGiftOneGetOne()
 
-        subscribeButton.setOnClickListener { subscribeUser() }
-
-        giftOneGetOneContainer?.isVisible = appConfigManager.enableGiftOneGetOne()
-    }
-
-    private fun toggleDescriptionView(button: ImageView?, descriptionView: TextView?) {
-        if (descriptionView?.visibility == View.VISIBLE) {
-            descriptionView.visibility = View.GONE
-            button?.setImageResource(R.drawable.ic_keyboard_arrow_down_black_24dp)
-        } else {
-            descriptionView?.visibility = View.VISIBLE
-            button?.setImageResource(R.drawable.ic_keyboard_arrow_up_black_24dp)
+        if (appConfigManager.useNewMysteryBenefits()) {
+            compositeSubscription.add(inventoryRepository.getLatestMysteryItem().subscribe(Consumer {
+                DataBindingUtils.loadImage(binding.subBenefitsMysteryItemIcon, "shop_set_mystery_${it.key?.split("_")?.last()}")
+                binding.subBenefitsMysteryItemText.text = context?.getString(R.string.subscribe_listitem3_description_new, it.text)
+            }, RxErrorHandler.handleEmptyError()))
         }
     }
 
@@ -179,8 +135,8 @@ class SubscriptionFragment : BaseFragment(), GemPurchaseActivity.CheckoutFragmen
         this.selectedSubscriptionSku = sku
         val subscriptionOptionButton = buttonForSku(this.selectedSubscriptionSku)
         subscriptionOptionButton?.setIsPurchased(true)
-        if (this.subscriptionButton != null) {
-            this.subscriptionButton?.isEnabled = true
+        if (binding.subscribeButton != null) {
+            binding.subscribeButton?.isEnabled = true
         }
     }
 
@@ -190,10 +146,10 @@ class SubscriptionFragment : BaseFragment(), GemPurchaseActivity.CheckoutFragmen
 
     private fun buttonForSku(sku: String?): SubscriptionOptionView? {
         return when (sku) {
-            PurchaseTypes.Subscription1Month -> subscription1MonthView
-            PurchaseTypes.Subscription3Month -> subscription3MonthView
-            PurchaseTypes.Subscription6Month -> subscription6MonthView
-            PurchaseTypes.Subscription12Month -> subscription12MonthView
+            PurchaseTypes.Subscription1Month -> binding.subscription1month
+            PurchaseTypes.Subscription3Month -> binding.subscription3month
+            PurchaseTypes.Subscription6Month -> binding.subscription6month
+            PurchaseTypes.Subscription12Month -> binding.subscription12month
             else -> null
         }
     }
@@ -219,24 +175,35 @@ class SubscriptionFragment : BaseFragment(), GemPurchaseActivity.CheckoutFragmen
         if (user != null) {
             val isSubscribed = user?.isSubscribed ?: false
 
-            if (this.subscriptionDetailsView == null) {
+            if (binding.subscriptionDetails == null) {
                 return
             }
 
             if (isSubscribed) {
-                this.subscriptionDetailsView?.visibility = View.VISIBLE
-                user?.purchased?.plan?.let { this.subscriptionDetailsView?.setPlan(it) }
-                this.subscribeBenefitsTitle?.setText(R.string.subscribe_prompt_thanks)
-                this.subscriptionOptions?.visibility = View.GONE
+                binding.headerImageView?.setImageResource(R.drawable.subscriber_header)
+                binding.subscriptionDetails.visibility = View.VISIBLE
+                binding.subscriptionDetails.currentUserID = user?.id
+                user?.purchased?.plan?.let { binding.subscriptionDetails.setPlan(it) }
+                binding.subscribeBenefitsTitle.setText(R.string.subscribe_prompt_thanks)
+                binding.subscriptionOptions.visibility = View.GONE
             } else {
+                binding.headerImageView.setImageResource(R.drawable.subscribe_header)
                 if (!hasLoadedSubscriptionOptions) {
                     return
                 }
-                this.subscriptionOptions?.visibility = View.VISIBLE
-                this.subscriptionDetailsView?.visibility = View.GONE
+                binding.subscriptionOptions.visibility = View.VISIBLE
+                binding.subscriptionDetails.visibility = View.GONE
+                binding.subscribeBenefitsTitle.setText(R.string.subscribe_prompt)
             }
-            this.loadingIndicator?.visibility = View.GONE
+            binding.loadingIndicator.visibility = View.GONE
         }
+    }
+
+    private fun showSubscriptionOptions() {
+        binding.subscriptionOptions.visibility = View.VISIBLE
+        binding.subscriptionOptions.postDelayed({
+            binding.scrollView.smoothScrollTo(0, binding.subscriptionOptions.top ?: 0)
+        }, 500)
     }
 
     private fun subscribeUser() {

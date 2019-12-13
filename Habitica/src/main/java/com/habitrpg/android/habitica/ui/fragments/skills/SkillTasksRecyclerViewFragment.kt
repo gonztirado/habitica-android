@@ -4,7 +4,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.habitrpg.android.habitica.R
@@ -25,17 +24,17 @@ import io.reactivex.subjects.PublishSubject
 import javax.inject.Inject
 import javax.inject.Named
 
-class SkillTasksRecyclerViewFragment : BaseFragment() {
+class SkillTasksRecyclerViewFragment() : BaseFragment() {
     @Inject
     lateinit var taskRepository: TaskRepository
     @field:[Inject Named(AppModule.NAMED_USER_ID)]
     lateinit var userId: String
+    var taskType: String? = null
 
     private val recyclerView: RecyclerView? by bindView(R.id.recyclerView)
 
     var adapter: SkillTasksRecyclerViewAdapter = SkillTasksRecyclerViewAdapter(null, true)
     internal var layoutManager: LinearLayoutManager? = null
-    var taskType: String? = null
 
     private val taskSelectionEvents = PublishSubject.create<Task>()
 
@@ -57,11 +56,6 @@ class SkillTasksRecyclerViewFragment : BaseFragment() {
 
         resetViews()
 
-        var tasks = taskRepository.getTasks(taskType ?: "", userId)
-        if (taskType == Task.TYPE_TODO) {
-            tasks = tasks.map { it.where().equalTo("completed", false).findAll() }
-        }
-
         val layoutManager = LinearLayoutManager(context)
         recyclerView?.layoutManager = layoutManager
 
@@ -70,12 +64,16 @@ class SkillTasksRecyclerViewFragment : BaseFragment() {
             taskSelectionEvents.onNext(it)
         }, RxErrorHandler.handleEmptyError()))
         recyclerView?.adapter = adapter
+    }
 
-        context?.let {
-            recyclerView?.setBackgroundColor(ContextCompat.getColor(it, R.color.blue_5))
+    override fun onResume() {
+        super.onResume()
+
+        var tasks = taskRepository.getTasks(taskType ?: "", userId)
+        if (taskType == Task.TYPE_TODO) {
+            tasks = tasks.map { it.where().equalTo("completed", false).findAll() }
         }
-
-        compositeSubscription.add(tasks.firstElement().subscribe(Consumer {
+        compositeSubscription.add(tasks.subscribe(Consumer {
             adapter.updateData(it)
         }, RxErrorHandler.handleEmptyError()))
     }

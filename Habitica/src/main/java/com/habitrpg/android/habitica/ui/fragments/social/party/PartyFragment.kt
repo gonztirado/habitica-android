@@ -61,7 +61,7 @@ class PartyFragment : BaseMainFragment() {
         arguments?.let {
             val args = PartyFragmentArgs.fromBundle(it)
             viewPager?.currentItem = args.tabToOpen
-            if (args.partyID?.isNotEmpty() == true) {
+            if (args.partyID?.isNotBlank() == true) {
                 viewModel.setGroupID(args.partyID ?: "")
             }
         }
@@ -119,7 +119,7 @@ class PartyFragment : BaseMainFragment() {
                 return true
             }
             R.id.menu_guild_leave -> {
-                (detailFragment as? PartyDetailFragment)?.leaveParty()
+                detailFragment?.leaveParty()
                 return true
             }
             R.id.menu_guild_refresh -> {
